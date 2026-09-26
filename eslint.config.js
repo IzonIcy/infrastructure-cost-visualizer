@@ -26,6 +26,8 @@ export default [
         decodeShareState: "readonly",
         calcConvertCurrency: "readonly",
         calcMonthlyCost: "readonly",
+        calcToNumber: "readonly",
+        calcFormatInputNumber: "readonly",
       },
     },
   },
