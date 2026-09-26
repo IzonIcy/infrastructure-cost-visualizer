@@ -22,6 +22,26 @@ try {
   const html = await home.text();
   assert(html.includes("Cloud Spend Planning Desk"), "home page returned unexpected HTML");
 
+  // Every local asset index.html references must actually be served. These
+  // load as classic <script> tags, so a 404 does not fail the request — the
+  // browser just refuses to execute the JSON error body and the app dies on a
+  // ReferenceError at boot with no useful diagnostics.
+  const assetPaths = [
+    ...html.matchAll(/<script[^>]+src="([^"]+)"/g),
+    ...html.matchAll(/<link[^>]+href="([^"]+)"/g),
+  ]
+    .map((match) => match[1])
+    .filter((href) => !href.startsWith("/") && !/^https?:/.test(href));
+
+  assert(assetPaths.length > 0, "no local assets found in index.html");
+  for (const assetPath of assetPaths) {
+    const assetRes = await fetch(`${base}/${assetPath}`);
+    assert(
+      assetRes.ok,
+      `index.html references ${assetPath} but the server returned ${assetRes.status}`,
+    );
+  }
+
   const health = await fetch(`${base}/api/health`);
   assert(health.ok, "health endpoint failed");
   const healthJson = await health.json();
