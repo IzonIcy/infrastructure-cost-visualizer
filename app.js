@@ -127,10 +127,10 @@ const presets = {
   },
 };
 
+// Single parser for the whole app — calc.js owns it so the clamping and
+// rounding rules around it are unit-testable.
 function toNumber(value, fallback = 0) {
-  const normalized = typeof value === "string" ? value.replace(/,/g, "") : value;
-  const num = Number(normalized);
-  return Number.isFinite(num) ? num : fallback;
+  return calcToNumber(value, fallback);
 }
 
 function clamp(value, min, max) {
@@ -152,11 +152,7 @@ function formatCurrency(amount, currency) {
 }
 
 function formatInputNumber(value, maxFractionDigits = 2) {
-  return toNumber(value).toLocaleString(undefined, {
-    useGrouping: false,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: maxFractionDigits,
-  });
+  return calcFormatInputNumber(value, maxFractionDigits);
 }
 
 function convertCurrency(amount, fromCurrency, toCurrency) {

@@ -22,8 +22,29 @@ const CALC_MODEL_MULTIPLIERS = {
 };
 
 function calcToNumber(value, fallback = 0) {
-  const parsed = typeof value === "number" ? value : parseFloat(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value !== "string") return fallback;
+  // Empty and whitespace-only input is "no value", not zero. Number("") is 0
+  // and passes the isFinite check, so the fallback was previously unreachable
+  // and a cleared field read as a real 0.
+  const normalized = value.replace(/,/g, "").trim();
+  if (normalized === "") return fallback;
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Serialize a number for an <input type="number"> value.
+ *
+ * Must stay locale-independent. The browser blanks any input value that is
+ * not a valid floating-point number, so a locale-formatted "0,11" written
+ * from a comma-decimal UI locale becomes "" — the row then recalculates as
+ * $0 and the zero is persisted. Formatting for humans belongs in the
+ * read-only cells, which go through Intl.
+ */
+function calcFormatInputNumber(value, maxFractionDigits = 2) {
+  const factor = 10 ** maxFractionDigits;
+  return String(Math.round(calcToNumber(value) * factor) / factor);
 }
 
 function calcClamp(value, min, max) {
@@ -50,6 +71,7 @@ if (typeof module !== "undefined" && module.exports) {
     CALC_EXCHANGE_RATES,
     CALC_MODEL_MULTIPLIERS,
     calcToNumber,
+    calcFormatInputNumber,
     calcClamp,
     calcConvertCurrency,
     calcMonthlyCost,
