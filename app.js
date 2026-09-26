@@ -185,8 +185,12 @@ function normalizeRow(row, { currency = currentDisplayCurrency, amountsInBaseCur
     service: sanitizeText(row?.service, "Untitled service", 120),
     category: normalizeChoice(row?.category, CATEGORY_OPTIONS, "Other"),
     model: normalizeChoice(row?.model, MODEL_OPTIONS, "on-demand"),
-    qty: clamp(toNumber(row?.qty), 0, 1_000_000),
-    units: clamp(toNumber(row?.units), 0, 1_000_000),
+    // qty and units are counts (nodes, hours/month) and the row inputs
+    // format them with zero fraction digits, so round here too. Previously
+    // the stored value and the displayed value could disagree, and a
+    // fractional CSV import persisted a fraction the UI then re-rounded.
+    qty: clamp(Math.round(toNumber(row?.qty)), 0, 1_000_000),
+    units: clamp(Math.round(toNumber(row?.units)), 0, 1_000_000),
     price: amountsInBaseCurrency ? priceValue : Math.max(0, toBaseCurrency(priceValue, currency)),
     discount: clamp(toNumber(row?.discount), 0, 100),
   };
@@ -488,8 +492,8 @@ function readDisplayRow(tr) {
     service: sanitizeText(value(".service"), "Untitled service", 120),
     category: normalizeChoice(value(".category"), CATEGORY_OPTIONS, "Other"),
     model: normalizeChoice(value(".model"), MODEL_OPTIONS, "on-demand"),
-    qty: clamp(toNumber(value(".qty")), 0, 1_000_000),
-    units: clamp(toNumber(value(".units")), 0, 1_000_000),
+    qty: clamp(Math.round(toNumber(value(".qty"))), 0, 1_000_000),
+    units: clamp(Math.round(toNumber(value(".units"))), 0, 1_000_000),
     price: Math.max(0, toNumber(value(".price"))),
     discount: clamp(toNumber(value(".discount")), 0, 100),
   };
@@ -935,8 +939,11 @@ function applyScenarioState({
   els.growthRate.value = String(clamp(toNumber(growthRate, DEFAULT_GROWTH_RATE), -10, 25));
   setBudgetInput(monthlyBudget, currentDisplayCurrency);
 
-  const normalizedRows = normalizeRows(rows, { amountsInBaseCurrency: true });
-  renderRows(normalizedRows.length ? normalizedRows : getDefaultRows());
+  // An explicitly empty ledger is a legitimate state — "start from a blank
+  // sheet" has to work. The rows default parameter above already covers an
+  // absent key, so falling back to four demo rows here destroyed the user's
+  // intent on reload and turned a shared blank sheet into four line items.
+  renderRows(normalizeRows(rows, { amountsInBaseCurrency: true }));
   recalculateAndRender();
 }
 
