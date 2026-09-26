@@ -4,18 +4,6 @@ const DEFAULT_SCENARIO_NAME = "Q2 Production";
 const DEFAULT_MONTHLY_BUDGET_USD = 8000;
 const DEFAULT_GROWTH_RATE = 4;
 
-const CATEGORY_OPTIONS = [
-  "Compute",
-  "Storage",
-  "Database",
-  "Networking",
-  "Monitoring",
-  "Security",
-  "Other",
-];
-
-const MODEL_OPTIONS = ["on-demand", "reserved", "spot"];
-
 const CSV_REQUIRED_HEADERS = [
   "service",
   "category",
@@ -285,47 +273,19 @@ function fromBaseCurrency(amount, toCurrency = currentDisplayCurrency) {
   return convertCurrency(amount, BASE_CURRENCY, toCurrency);
 }
 
-function sanitizeText(value, fallback, maxLength) {
-  const cleaned = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, maxLength);
-  return cleaned || fallback;
-}
-
-function normalizeChoice(value, options, fallback) {
-  return options.includes(value) ? value : fallback;
-}
-
-function normalizeRow(
-  row,
-  { currency = currentDisplayCurrency, amountsInBaseCurrency = false } = {},
-) {
-  const priceValue = Math.max(0, toNumber(row?.price));
-  return {
-    service: sanitizeText(row?.service, "Untitled service", 120),
-    category: normalizeChoice(row?.category, CATEGORY_OPTIONS, "Other"),
-    model: normalizeChoice(row?.model, MODEL_OPTIONS, "on-demand"),
-    // qty and units are counts (nodes, hours/month) and the row inputs
-    // format them with zero fraction digits, so round here too. Previously
-    // the stored value and the displayed value could disagree, and a
-    // fractional CSV import persisted a fraction the UI then re-rounded.
-    qty: clamp(Math.round(toNumber(row?.qty)), 0, 1_000_000),
-    units: clamp(Math.round(toNumber(row?.units)), 0, 1_000_000),
-    price: amountsInBaseCurrency
-      ? priceValue
-      : Math.max(0, toBaseCurrency(priceValue, currency)),
-    discount: clamp(toNumber(row?.discount), 0, 100),
-  };
+// The rules themselves live in normalize.js so they can be unit-tested;
+// these wrappers only bind the current display currency so that no call site
+// in app.js has to pass it.
+function normalizeRow(row, options = {}) {
+  return normalizeLedgerRow(row, { currency: currentDisplayCurrency, ...options });
 }
 
 function normalizeRows(rows, options = {}) {
-  if (!Array.isArray(rows)) return [];
-  return rows.map((row) => normalizeRow(row, options));
+  return normalizeLedgerRows(rows, { currency: currentDisplayCurrency, ...options });
 }
 
 function sanitizeScenarioName(name) {
-  return sanitizeText(name, DEFAULT_SCENARIO_NAME, 80);
+  return normalizeSanitizeText(name, DEFAULT_SCENARIO_NAME, 80);
 }
 
 function buildScenarioFileName(name) {
@@ -663,7 +623,7 @@ function modelLabel(model) {
 function readDisplayRow(tr) {
   const value = (selector) => tr.querySelector(selector).value;
   return {
-    service: sanitizeText(value(".service"), "Untitled service", 120),
+    service: normalizeSanitizeText(value(".service"), "Untitled service", 120),
     category: normalizeChoice(value(".category"), CATEGORY_OPTIONS, "Other"),
     model: normalizeChoice(value(".model"), MODEL_OPTIONS, "on-demand"),
     qty: clamp(Math.round(toNumber(value(".qty"))), 0, 1_000_000),

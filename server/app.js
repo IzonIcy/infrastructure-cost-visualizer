@@ -14,6 +14,7 @@ const PUBLIC_FILES = new Set([
   "app.js",
   "calc.js",
   "csv.js",
+  "normalize.js",
   "shareState.js",
 ]);
 
