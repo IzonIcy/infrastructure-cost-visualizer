@@ -1014,14 +1014,13 @@ function hydrate() {
   resetApp();
 }
 
+// Reuse the Save payload rather than re-deriving it. This function used to
+// pass BASE_CURRENCY while the DOM held display-currency amounts, so every
+// non-USD link stored EUR figures labelled USD and came back short by the FX
+// rate. The only difference from a saved scenario is the name field.
 function currentShareState() {
-  return {
-    rows: getRowsFromUI({ currency: BASE_CURRENCY }),
-    currency: BASE_CURRENCY,
-    growthRate: Number.parseFloat(els.growthRate.value) || 0,
-    scenarioName: sanitizeScenarioName(els.scenarioName.value),
-    monthlyBudget: readBudgetFromUi(BASE_CURRENCY),
-  };
+  const { name, ...rest } = buildScenarioPayloadFromUi();
+  return { scenarioName: name, ...rest };
 }
 
 async function shareCurrentScenario() {
