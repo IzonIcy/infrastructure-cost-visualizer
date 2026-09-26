@@ -703,7 +703,9 @@ function renderRow(row) {
     0,
   );
 
-  tr.querySelector(".remove").addEventListener("click", () => {
+  const removeBtn = tr.querySelector(".remove");
+  removeBtn.setAttribute("aria-label", `Remove ${normalized.service}`);
+  removeBtn.addEventListener("click", () => {
     tr.remove();
     recalculateAndRender();
   });
