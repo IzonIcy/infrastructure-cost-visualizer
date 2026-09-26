@@ -76,6 +76,8 @@ const els = {
 
 let currentDisplayCurrency = BASE_CURRENCY;
 let resizeTimer;
+let recalcTimer;
+let persistTimer;
 
 const presets = {
   saas: {
@@ -556,20 +558,25 @@ function getRowsFromUI({ currency = currentDisplayCurrency } = {}) {
   return [...els.resourceBody.querySelectorAll("tr")].map((tr) => readRow(tr, { currency }));
 }
 
-function saveState(rows, currency, growthRate, monthlyBudget) {
-  const payload = {
-    rows,
-    currency,
-    growthRate,
-    scenarioName: sanitizeScenarioName(els.scenarioName.value),
-    monthlyBudget,
-  };
-
+function persistState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentShareState()));
   } catch {
     // Ignore storage failures in private browsing or restricted environments.
   }
+}
+
+function schedulePersist() {
+  window.clearTimeout(persistTimer);
+  persistTimer = window.setTimeout(persistState, 250);
+}
+
+// The growth slider and the budget field only feed derived numbers, so they do
+// not need to repaint on every keystroke. Row inputs stay synchronous — the
+// cost cell tracking your typing is the point of a worksheet.
+function scheduleRecalculate() {
+  window.clearTimeout(recalcTimer);
+  recalcTimer = window.setTimeout(recalculateAndRender, 120);
 }
 
 function loadState() {
@@ -912,7 +919,7 @@ function recalculateAndRender() {
   )}.`;
 
   renderRecommendations(rows, monthlyUsd, topCategory, deltaUsd, budgetUsd);
-  saveState(rows, currency, growthRate, budgetUsd);
+  persistState();
 }
 
 function applyScenarioState({
@@ -1165,9 +1172,11 @@ els.resetBtn.addEventListener("click", () => {
 });
 
 els.currencySelect.addEventListener("change", handleCurrencyChange);
-els.growthRate.addEventListener("input", recalculateAndRender);
-els.monthlyBudget.addEventListener("input", recalculateAndRender);
-els.scenarioName.addEventListener("input", recalculateAndRender);
+els.growthRate.addEventListener("input", scheduleRecalculate);
+els.monthlyBudget.addEventListener("input", scheduleRecalculate);
+// The scenario name is not an input to any chart, so a keystroke here should
+// not redraw three canvases to change nothing.
+els.scenarioName.addEventListener("input", schedulePersist);
 els.presetSaas.addEventListener("click", () => applyPreset("saas"));
 els.presetData.addEventListener("click", () => applyPreset("data"));
 els.presetEdge.addEventListener("click", () => applyPreset("edge"));
