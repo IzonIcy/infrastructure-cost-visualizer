@@ -19,17 +19,6 @@ const MODEL_OPTIONS = ["on-demand", "reserved", "spot"];
 const CSV_REQUIRED_HEADERS = ["service", "category", "model", "qty", "units", "price", "discount"];
 const CSV_HEADERS = [...CSV_REQUIRED_HEADERS, "currency"];
 
-const exchangeRates = {
-  USD: 1,
-  EUR: 0.92,
-  GBP: 0.78,
-};
-
-const modelMultipliers = {
-  "on-demand": 1,
-  reserved: 0.72,
-  spot: 0.35,
-};
 
 const modelColors = {
   "on-demand": "#35566d",
@@ -156,7 +145,7 @@ function formatInputNumber(value, maxFractionDigits = 2) {
 }
 
 function convertCurrency(amount, fromCurrency, toCurrency) {
-  return calcConvertCurrency(amount, fromCurrency, toCurrency, exchangeRates);
+  return calcConvertCurrency(amount, fromCurrency, toCurrency);
 }
 
 function toBaseCurrency(amount, fromCurrency = currentDisplayCurrency) {
@@ -280,8 +269,8 @@ async function apiFetch(path, options) {
   }
 
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
     ...options,
+    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
   });
 
   if (response.status === 204) return null;
@@ -367,7 +356,7 @@ async function loadScenarioFromServer() {
     }
 
     const selected = visibleItems[choice - 1];
-    const detail = await apiFetch(`/api/scenarios/${selected.id}`);
+    const detail = await apiFetch(`/api/scenarios/${encodeURIComponent(selected.id)}`);
     const scenario = detail?.item;
 
     if (!scenario) {
@@ -442,7 +431,7 @@ function importRowsFromCsv(content) {
       const fileCurrency = String(cols[headerIndex("currency")] ?? "")
         .trim()
         .toUpperCase();
-      const rowCurrency = exchangeRates[fileCurrency] ? fileCurrency : currentDisplayCurrency;
+      const rowCurrency = CALC_EXCHANGE_RATES[fileCurrency] ? fileCurrency : currentDisplayCurrency;
 
       return normalizeRow(rawRow, { currency: rowCurrency });
     })
@@ -504,7 +493,7 @@ function readRow(tr, { currency = currentDisplayCurrency } = {}) {
 }
 
 function monthlyCost(row) {
-  return calcMonthlyCost(row, modelMultipliers);
+  return calcMonthlyCost(row);
 }
 
 function formatDisplayPrice(usdPrice) {
@@ -605,9 +594,11 @@ function aggregateByKey(rows, key) {
 
 function getCanvasSurface(canvas) {
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.round(rect.width));
-  const height = Math.max(1, Math.round(rect.height));
+  // clientWidth/Height exclude the CSS border; getBoundingClientRect does
+  // not. canvas has border: 1px, so the backing store was 2px oversized in
+  // both axes and the drawing was clipped along the right and bottom.
+  const width = Math.max(1, canvas.clientWidth);
+  const height = Math.max(1, canvas.clientHeight);
   const pixelWidth = Math.round(width * dpr);
   const pixelHeight = Math.round(height * dpr);
 
@@ -865,9 +856,7 @@ function recalculateAndRender() {
   const growthRate = clamp(toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE), -10, 25);
   const budgetUsd = readBudgetFromUi(currency);
 
-  els.growthRate.value = String(growthRate);
   els.growthValue.value = `${growthRate}%`;
-  els.growthValue.textContent = `${growthRate}%`;
   // Don't write the sanitized name back while typing — it eats trailing
   // spaces and jumps the caret. Sanitization happens on save/export/share.
 
@@ -933,7 +922,7 @@ function applyScenarioState({
   currency = BASE_CURRENCY,
   rows = getDefaultRows(),
 }) {
-  currentDisplayCurrency = exchangeRates[currency] ? currency : BASE_CURRENCY;
+  currentDisplayCurrency = CALC_EXCHANGE_RATES[currency] ? currency : BASE_CURRENCY;
   els.currencySelect.value = currentDisplayCurrency;
   els.scenarioName.value = sanitizeScenarioName(scenarioName);
   els.growthRate.value = String(clamp(toNumber(growthRate, DEFAULT_GROWTH_RATE), -10, 25));
@@ -973,7 +962,9 @@ function applyPreset(name) {
 }
 
 function handleCurrencyChange() {
-  const nextCurrency = exchangeRates[els.currencySelect.value] ? els.currencySelect.value : BASE_CURRENCY;
+  const nextCurrency = CALC_EXCHANGE_RATES[els.currencySelect.value]
+    ? els.currencySelect.value
+    : BASE_CURRENCY;
   if (nextCurrency === currentDisplayCurrency) {
     recalculateAndRender();
     return;
@@ -1053,7 +1044,7 @@ async function openComparison() {
   let items;
   try {
     const response = await apiFetch("/api/scenarios");
-    items = response?.items ?? [];
+    items = Array.isArray(response?.items) ? response.items : [];
   } catch (error) {
     setImportStatus(
       `Could not load scenarios (${error instanceof Error ? error.message : "unknown"}).`,
@@ -1082,7 +1073,7 @@ async function openComparison() {
   for (const item of items) {
     const option = document.createElement("option");
     option.value = item.id;
-    option.textContent = `${item.name} (updated ${String(item.updatedAt || "").slice(0, 10)})`;
+    option.textContent = `${item.name} (updated ${formatDateLabel(item.updatedAt)})`;
     select.appendChild(option);
   }
   select.style.marginRight = "8px";
@@ -1095,7 +1086,7 @@ async function openComparison() {
 
   runButton.addEventListener("click", async () => {
     try {
-      const detail = await apiFetch(`/api/scenarios/${select.value}`);
+      const detail = await apiFetch(`/api/scenarios/${encodeURIComponent(select.value)}`);
       renderComparison(detail?.item ?? null);
     } catch (error) {
       setImportStatus(
