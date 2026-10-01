@@ -4,10 +4,16 @@
 
 function csvEscape(value) {
   const raw = String(value ?? "");
-  if (/[",\n\r]/.test(raw)) {
-    return `"${raw.replace(/"/g, '""')}"`;
+  // Excel and Sheets evaluate a leading =, +, - or @ as a formula, so a value
+  // imported from someone else's CSV would execute on re-export. Prefixing an
+  // apostrophe is the spreadsheet convention for "this is text". A bare
+  // number is data rather than a formula, so -42 must stay -42.
+  const looksNumeric = raw.trim() !== "" && Number.isFinite(Number(raw));
+  const safe = !looksNumeric && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  if (/[",\n\r]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return raw;
+  return safe;
 }
 
 function parseCsvContent(content) {
