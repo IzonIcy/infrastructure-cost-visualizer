@@ -4,32 +4,16 @@ const DEFAULT_SCENARIO_NAME = "Q2 Production";
 const DEFAULT_MONTHLY_BUDGET_USD = 8000;
 const DEFAULT_GROWTH_RATE = 4;
 
-const CATEGORY_OPTIONS = [
-  "Compute",
-  "Storage",
-  "Database",
-  "Networking",
-  "Monitoring",
-  "Security",
-  "Other",
+const CSV_REQUIRED_HEADERS = [
+  "service",
+  "category",
+  "model",
+  "qty",
+  "units",
+  "price",
+  "discount",
 ];
-
-const MODEL_OPTIONS = ["on-demand", "reserved", "spot"];
-
-const CSV_REQUIRED_HEADERS = ["service", "category", "model", "qty", "units", "price", "discount"];
 const CSV_HEADERS = [...CSV_REQUIRED_HEADERS, "currency"];
-
-const exchangeRates = {
-  USD: 1,
-  EUR: 0.92,
-  GBP: 0.78,
-};
-
-const modelMultipliers = {
-  "on-demand": 1,
-  reserved: 0.72,
-  spot: 0.35,
-};
 
 const modelColors = {
   "on-demand": "#35566d",
@@ -87,6 +71,8 @@ const els = {
 
 let currentDisplayCurrency = BASE_CURRENCY;
 let resizeTimer;
+let recalcTimer;
+let persistTimer;
 
 const presets = {
   saas: {
@@ -94,11 +80,51 @@ const presets = {
     monthlyBudget: 12000,
     growthRate: 5,
     rows: [
-      { service: "Web App Nodes", category: "Compute", model: "reserved", qty: 8, units: 730, price: 0.11, discount: 0 },
-      { service: "Managed PostgreSQL", category: "Database", model: "on-demand", qty: 2, units: 730, price: 0.63, discount: 0 },
-      { service: "Object Storage", category: "Storage", model: "reserved", qty: 24, units: 1, price: 20, discount: 8 },
-      { service: "CDN + WAF Traffic", category: "Networking", model: "spot", qty: 18, units: 100, price: 0.085, discount: 0 },
-      { service: "Logging + APM", category: "Monitoring", model: "on-demand", qty: 1, units: 1, price: 780, discount: 0 },
+      {
+        service: "Web App Nodes",
+        category: "Compute",
+        model: "reserved",
+        qty: 8,
+        units: 730,
+        price: 0.11,
+        discount: 0,
+      },
+      {
+        service: "Managed PostgreSQL",
+        category: "Database",
+        model: "on-demand",
+        qty: 2,
+        units: 730,
+        price: 0.63,
+        discount: 0,
+      },
+      {
+        service: "Object Storage",
+        category: "Storage",
+        model: "reserved",
+        qty: 24,
+        units: 1,
+        price: 20,
+        discount: 8,
+      },
+      {
+        service: "CDN + WAF Traffic",
+        category: "Networking",
+        model: "spot",
+        qty: 18,
+        units: 100,
+        price: 0.085,
+        discount: 0,
+      },
+      {
+        service: "Logging + APM",
+        category: "Monitoring",
+        model: "on-demand",
+        qty: 1,
+        units: 1,
+        price: 780,
+        discount: 0,
+      },
     ],
   },
   data: {
@@ -106,11 +132,51 @@ const presets = {
     monthlyBudget: 22000,
     growthRate: 7,
     rows: [
-      { service: "ETL Workers", category: "Compute", model: "spot", qty: 22, units: 730, price: 0.1, discount: 0 },
-      { service: "Warehouse Cluster", category: "Database", model: "on-demand", qty: 3, units: 730, price: 1.9, discount: 0 },
-      { service: "Raw Data Lake", category: "Storage", model: "reserved", qty: 120, units: 1, price: 17, discount: 12 },
-      { service: "Streaming Pipeline", category: "Networking", model: "on-demand", qty: 1, units: 1, price: 2600, discount: 0 },
-      { service: "Security Scanning", category: "Security", model: "reserved", qty: 1, units: 1, price: 980, discount: 5 },
+      {
+        service: "ETL Workers",
+        category: "Compute",
+        model: "spot",
+        qty: 22,
+        units: 730,
+        price: 0.1,
+        discount: 0,
+      },
+      {
+        service: "Warehouse Cluster",
+        category: "Database",
+        model: "on-demand",
+        qty: 3,
+        units: 730,
+        price: 1.9,
+        discount: 0,
+      },
+      {
+        service: "Raw Data Lake",
+        category: "Storage",
+        model: "reserved",
+        qty: 120,
+        units: 1,
+        price: 17,
+        discount: 12,
+      },
+      {
+        service: "Streaming Pipeline",
+        category: "Networking",
+        model: "on-demand",
+        qty: 1,
+        units: 1,
+        price: 2600,
+        discount: 0,
+      },
+      {
+        service: "Security Scanning",
+        category: "Security",
+        model: "reserved",
+        qty: 1,
+        units: 1,
+        price: 980,
+        discount: 5,
+      },
     ],
   },
   edge: {
@@ -118,19 +184,59 @@ const presets = {
     monthlyBudget: 9000,
     growthRate: 4,
     rows: [
-      { service: "Regional API Nodes", category: "Compute", model: "reserved", qty: 10, units: 730, price: 0.13, discount: 0 },
-      { service: "Redis Cache", category: "Database", model: "on-demand", qty: 2, units: 730, price: 0.34, discount: 0 },
-      { service: "Edge Transfer", category: "Networking", model: "spot", qty: 42, units: 100, price: 0.07, discount: 0 },
-      { service: "Image Storage", category: "Storage", model: "reserved", qty: 30, units: 1, price: 19, discount: 5 },
-      { service: "Observability", category: "Monitoring", model: "on-demand", qty: 1, units: 1, price: 540, discount: 0 },
+      {
+        service: "Regional API Nodes",
+        category: "Compute",
+        model: "reserved",
+        qty: 10,
+        units: 730,
+        price: 0.13,
+        discount: 0,
+      },
+      {
+        service: "Redis Cache",
+        category: "Database",
+        model: "on-demand",
+        qty: 2,
+        units: 730,
+        price: 0.34,
+        discount: 0,
+      },
+      {
+        service: "Edge Transfer",
+        category: "Networking",
+        model: "spot",
+        qty: 42,
+        units: 100,
+        price: 0.07,
+        discount: 0,
+      },
+      {
+        service: "Image Storage",
+        category: "Storage",
+        model: "reserved",
+        qty: 30,
+        units: 1,
+        price: 19,
+        discount: 5,
+      },
+      {
+        service: "Observability",
+        category: "Monitoring",
+        model: "on-demand",
+        qty: 1,
+        units: 1,
+        price: 540,
+        discount: 0,
+      },
     ],
   },
 };
 
+// Single parser for the whole app — calc.js owns it so the clamping and
+// rounding rules around it are unit-testable.
 function toNumber(value, fallback = 0) {
-  const normalized = typeof value === "string" ? value.replace(/,/g, "") : value;
-  const num = Number(normalized);
-  return Number.isFinite(num) ? num : fallback;
+  return calcToNumber(value, fallback);
 }
 
 function clamp(value, min, max) {
@@ -152,15 +258,11 @@ function formatCurrency(amount, currency) {
 }
 
 function formatInputNumber(value, maxFractionDigits = 2) {
-  return toNumber(value).toLocaleString(undefined, {
-    useGrouping: false,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: maxFractionDigits,
-  });
+  return calcFormatInputNumber(value, maxFractionDigits);
 }
 
 function convertCurrency(amount, fromCurrency, toCurrency) {
-  return calcConvertCurrency(amount, fromCurrency, toCurrency, exchangeRates);
+  return calcConvertCurrency(amount, fromCurrency, toCurrency);
 }
 
 function toBaseCurrency(amount, fromCurrency = currentDisplayCurrency) {
@@ -171,38 +273,19 @@ function fromBaseCurrency(amount, toCurrency = currentDisplayCurrency) {
   return convertCurrency(amount, BASE_CURRENCY, toCurrency);
 }
 
-function sanitizeText(value, fallback, maxLength) {
-  const cleaned = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, maxLength);
-  return cleaned || fallback;
-}
-
-function normalizeChoice(value, options, fallback) {
-  return options.includes(value) ? value : fallback;
-}
-
-function normalizeRow(row, { currency = currentDisplayCurrency, amountsInBaseCurrency = false } = {}) {
-  const priceValue = Math.max(0, toNumber(row?.price));
-  return {
-    service: sanitizeText(row?.service, "Untitled service", 120),
-    category: normalizeChoice(row?.category, CATEGORY_OPTIONS, "Other"),
-    model: normalizeChoice(row?.model, MODEL_OPTIONS, "on-demand"),
-    qty: clamp(toNumber(row?.qty), 0, 1_000_000),
-    units: clamp(toNumber(row?.units), 0, 1_000_000),
-    price: amountsInBaseCurrency ? priceValue : Math.max(0, toBaseCurrency(priceValue, currency)),
-    discount: clamp(toNumber(row?.discount), 0, 100),
-  };
+// The rules themselves live in normalize.js so they can be unit-tested;
+// these wrappers only bind the current display currency so that no call site
+// in app.js has to pass it.
+function normalizeRow(row, options = {}) {
+  return normalizeLedgerRow(row, { currency: currentDisplayCurrency, ...options });
 }
 
 function normalizeRows(rows, options = {}) {
-  if (!Array.isArray(rows)) return [];
-  return rows.map((row) => normalizeRow(row, options));
+  return normalizeLedgerRows(rows, { currency: currentDisplayCurrency, ...options });
 }
 
 function sanitizeScenarioName(name) {
-  return sanitizeText(name, DEFAULT_SCENARIO_NAME, 80);
+  return normalizeSanitizeText(name, DEFAULT_SCENARIO_NAME, 80);
 }
 
 function buildScenarioFileName(name) {
@@ -260,7 +343,7 @@ function getDefaultRows() {
         discount: 0,
       },
     ],
-    { amountsInBaseCurrency: true }
+    { amountsInBaseCurrency: true },
   );
 }
 
@@ -271,7 +354,10 @@ function setImportStatus(message, type = "") {
 }
 
 function isServedOverHttp() {
-  return window.location.protocol === "http:" || window.location.protocol === "https:";
+  return (
+    window.location.protocol === "http:" ||
+    window.location.protocol === "https:"
+  );
 }
 
 async function apiFetch(path, options) {
@@ -280,8 +366,11 @@ async function apiFetch(path, options) {
   }
 
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
   });
 
   if (response.status === 204) return null;
@@ -306,7 +395,10 @@ function readBudgetFromUi(currency = currentDisplayCurrency) {
 }
 
 function setBudgetInput(budgetUsd, currency = currentDisplayCurrency) {
-  const displayAmount = fromBaseCurrency(Math.max(0, toNumber(budgetUsd)), currency);
+  const displayAmount = fromBaseCurrency(
+    Math.max(0, toNumber(budgetUsd)),
+    currency,
+  );
   els.monthlyBudget.value = formatInputNumber(roundTo(displayAmount, 2), 2);
 }
 
@@ -314,7 +406,11 @@ function buildScenarioPayloadFromUi() {
   return {
     name: sanitizeScenarioName(els.scenarioName.value),
     currency: currentDisplayCurrency,
-    growthRate: clamp(toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE), -10, 25),
+    growthRate: clamp(
+      toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE),
+      -10,
+      25,
+    ),
     monthlyBudget: readBudgetFromUi(currentDisplayCurrency),
     rows: getRowsFromUI({ currency: currentDisplayCurrency }),
   };
@@ -328,9 +424,15 @@ async function saveScenarioToServer() {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setImportStatus(`Saved "${response?.item?.name || payload.name}" to the local server.`, "success");
+    setImportStatus(
+      `Saved "${response?.item?.name || payload.name}" to the local server.`,
+      "success",
+    );
   } catch (error) {
-    setImportStatus(error instanceof Error ? error.message : "Save failed.", "error");
+    setImportStatus(
+      error instanceof Error ? error.message : "Save failed.",
+      "error",
+    );
   } finally {
     els.saveServerBtn.disabled = false;
   }
@@ -343,7 +445,10 @@ async function loadScenarioFromServer() {
     const items = Array.isArray(list?.items) ? list.items : [];
 
     if (!items.length) {
-      setImportStatus("No saved scenarios are available on the local server yet.", "error");
+      setImportStatus(
+        "No saved scenarios are available on the local server yet.",
+        "error",
+      );
       return;
     }
 
@@ -356,18 +461,24 @@ async function loadScenarioFromServer() {
       .join("\n");
 
     const response = window.prompt(
-      `Choose a saved scenario:\n\n${choices}\n\nEnter 1-${visibleItems.length}:`
+      `Choose a saved scenario:\n\n${choices}\n\nEnter 1-${visibleItems.length}:`,
     );
 
     if (response === null) return;
 
     const choice = Number(response);
-    if (!Number.isFinite(choice) || choice < 1 || choice > visibleItems.length) {
+    if (
+      !Number.isFinite(choice) ||
+      choice < 1 ||
+      choice > visibleItems.length
+    ) {
       throw new Error("Enter a valid scenario number.");
     }
 
     const selected = visibleItems[choice - 1];
-    const detail = await apiFetch(`/api/scenarios/${selected.id}`);
+    const detail = await apiFetch(
+      `/api/scenarios/${encodeURIComponent(selected.id)}`,
+    );
     const scenario = detail?.item;
 
     if (!scenario) {
@@ -382,16 +493,25 @@ async function loadScenarioFromServer() {
       rows: scenario.rows,
     });
 
-    setImportStatus(`Loaded "${scenario.name}" from the local server.`, "success");
+    setImportStatus(
+      `Loaded "${scenario.name}" from the local server.`,
+      "success",
+    );
   } catch (error) {
-    setImportStatus(error instanceof Error ? error.message : "Load failed.", "error");
+    setImportStatus(
+      error instanceof Error ? error.message : "Load failed.",
+      "error",
+    );
   } finally {
     els.loadServerBtn.disabled = false;
   }
 }
 
 function exportRowsAsCsv() {
-  const rows = getDisplayRowsFromUI().map((row) => ({ ...row, currency: currentDisplayCurrency }));
+  const rows = getDisplayRowsFromUI().map((row) => ({
+    ...row,
+    currency: currentDisplayCurrency,
+  }));
   const lines = [CSV_HEADERS.join(",")];
 
   rows.forEach((row) => {
@@ -415,9 +535,13 @@ function importRowsFromCsv(content) {
     throw new Error("CSV is empty or missing row data.");
   }
 
-  const headers = parsedRows[0].map((cell) => String(cell).trim().toLowerCase());
+  const headers = parsedRows[0].map((cell) =>
+    String(cell).trim().toLowerCase(),
+  );
   const headerIndex = (name) => headers.indexOf(name);
-  const missingHeaders = CSV_REQUIRED_HEADERS.filter((name) => headerIndex(name) === -1);
+  const missingHeaders = CSV_REQUIRED_HEADERS.filter(
+    (name) => headerIndex(name) === -1,
+  );
 
   if (missingHeaders.length > 0) {
     throw new Error(`Missing required columns: ${missingHeaders.join(", ")}.`);
@@ -436,13 +560,17 @@ function importRowsFromCsv(content) {
         discount: cols[headerIndex("discount")] ?? "",
       };
 
-      const hasContent = Object.values(rawRow).some((value) => String(value).trim() !== "");
+      const hasContent = Object.values(rawRow).some(
+        (value) => String(value).trim() !== "",
+      );
       if (!hasContent) return null;
 
       const fileCurrency = String(cols[headerIndex("currency")] ?? "")
         .trim()
         .toUpperCase();
-      const rowCurrency = exchangeRates[fileCurrency] ? fileCurrency : currentDisplayCurrency;
+      const rowCurrency = CALC_EXCHANGE_RATES[fileCurrency]
+        ? fileCurrency
+        : currentDisplayCurrency;
 
       return normalizeRow(rawRow, { currency: rowCurrency });
     })
@@ -454,14 +582,18 @@ function importRowsFromCsv(content) {
 
   renderRows(importedRows);
   recalculateAndRender();
-  setImportStatus(`Imported ${importedRows.length} row(s) from CSV.`, "success");
+  setImportStatus(
+    `Imported ${importedRows.length} row(s) from CSV.`,
+    "success",
+  );
 }
 
 async function handleImportFile(file) {
   if (!file) return;
 
   const fileName = String(file.name || "").toLowerCase();
-  const looksLikeCsv = fileName.endsWith(".csv") || String(file.type || "").includes("csv");
+  const looksLikeCsv =
+    fileName.endsWith(".csv") || String(file.type || "").includes("csv");
 
   if (!looksLikeCsv) {
     setImportStatus("Please choose a CSV file.", "error");
@@ -473,8 +605,10 @@ async function handleImportFile(file) {
     importRowsFromCsv(text);
   } catch (error) {
     setImportStatus(
-      error instanceof Error ? error.message : "Import failed. Please check the CSV format.",
-      "error"
+      error instanceof Error
+        ? error.message
+        : "Import failed. Please check the CSV format.",
+      "error",
     );
   }
 }
@@ -489,11 +623,11 @@ function modelLabel(model) {
 function readDisplayRow(tr) {
   const value = (selector) => tr.querySelector(selector).value;
   return {
-    service: sanitizeText(value(".service"), "Untitled service", 120),
+    service: normalizeSanitizeText(value(".service"), "Untitled service", 120),
     category: normalizeChoice(value(".category"), CATEGORY_OPTIONS, "Other"),
     model: normalizeChoice(value(".model"), MODEL_OPTIONS, "on-demand"),
-    qty: clamp(toNumber(value(".qty")), 0, 1_000_000),
-    units: clamp(toNumber(value(".units")), 0, 1_000_000),
+    qty: clamp(Math.round(toNumber(value(".qty"))), 0, 1_000_000),
+    units: clamp(Math.round(toNumber(value(".units"))), 0, 1_000_000),
     price: Math.max(0, toNumber(value(".price"))),
     discount: clamp(toNumber(value(".discount")), 0, 100),
   };
@@ -504,7 +638,7 @@ function readRow(tr, { currency = currentDisplayCurrency } = {}) {
 }
 
 function monthlyCost(row) {
-  return calcMonthlyCost(row, modelMultipliers);
+  return calcMonthlyCost(row);
 }
 
 function formatDisplayPrice(usdPrice) {
@@ -524,9 +658,14 @@ function renderRow(row) {
   tr.querySelector(".qty").value = formatInputNumber(normalized.qty, 0);
   tr.querySelector(".units").value = formatInputNumber(normalized.units, 0);
   tr.querySelector(".price").value = formatDisplayPrice(normalized.price);
-  tr.querySelector(".discount").value = formatInputNumber(normalized.discount, 0);
+  tr.querySelector(".discount").value = formatInputNumber(
+    normalized.discount,
+    0,
+  );
 
-  tr.querySelector(".remove").addEventListener("click", () => {
+  const removeBtn = tr.querySelector(".remove");
+  removeBtn.setAttribute("aria-label", `Remove ${normalized.service}`);
+  removeBtn.addEventListener("click", () => {
     tr.remove();
     recalculateAndRender();
   });
@@ -555,32 +694,41 @@ function addRow(row) {
       units: 730,
       price: 0.1,
       discount: 0,
-    }
+    },
   );
 }
 
 function getDisplayRowsFromUI() {
-  return [...els.resourceBody.querySelectorAll("tr")].map((tr) => readDisplayRow(tr));
+  return [...els.resourceBody.querySelectorAll("tr")].map((tr) =>
+    readDisplayRow(tr),
+  );
 }
 
 function getRowsFromUI({ currency = currentDisplayCurrency } = {}) {
-  return [...els.resourceBody.querySelectorAll("tr")].map((tr) => readRow(tr, { currency }));
+  return [...els.resourceBody.querySelectorAll("tr")].map((tr) =>
+    readRow(tr, { currency }),
+  );
 }
 
-function saveState(rows, currency, growthRate, monthlyBudget) {
-  const payload = {
-    rows,
-    currency,
-    growthRate,
-    scenarioName: sanitizeScenarioName(els.scenarioName.value),
-    monthlyBudget,
-  };
-
+function persistState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentShareState()));
   } catch {
     // Ignore storage failures in private browsing or restricted environments.
   }
+}
+
+function schedulePersist() {
+  window.clearTimeout(persistTimer);
+  persistTimer = window.setTimeout(persistState, 250);
+}
+
+// The growth slider and the budget field only feed derived numbers, so they do
+// not need to repaint on every keystroke. Row inputs stay synchronous — the
+// cost cell tracking your typing is the point of a worksheet.
+function scheduleRecalculate() {
+  window.clearTimeout(recalcTimer);
+  recalcTimer = window.setTimeout(recalculateAndRender, 120);
 }
 
 function loadState() {
@@ -605,9 +753,11 @@ function aggregateByKey(rows, key) {
 
 function getCanvasSurface(canvas) {
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.round(rect.width));
-  const height = Math.max(1, Math.round(rect.height));
+  // clientWidth/Height exclude the CSS border; getBoundingClientRect does
+  // not. canvas has border: 1px, so the backing store was 2px oversized in
+  // both axes and the drawing was clipped along the right and bottom.
+  const width = Math.max(1, canvas.clientWidth);
+  const height = Math.max(1, canvas.clientHeight);
   const pixelWidth = Math.round(width * dpr);
   const pixelHeight = Math.round(height * dpr);
 
@@ -652,7 +802,10 @@ function drawCategoryBars(categoryMap, currency) {
 
     const value = document.createElement("span");
     value.className = "bar-value";
-    value.textContent = formatCurrency(fromBaseCurrency(cost, currency), currency);
+    value.textContent = formatCurrency(
+      fromBaseCurrency(cost, currency),
+      currency,
+    );
 
     track.appendChild(fill);
     row.append(label, track, value);
@@ -701,7 +854,7 @@ function drawDonut(modelMap, currency) {
     const label = document.createElement("span");
     label.textContent = `${modelLabel(model)} · ${Math.round((value / total) * 100)}% · ${formatCurrency(
       fromBaseCurrency(value, currency),
-      currency
+      currency,
     )}`;
 
     item.append(dot, label);
@@ -733,7 +886,8 @@ function drawForecast(monthlyBase, growthRate, currency) {
   const maxY = Math.max(...points, 1);
   const minY = Math.min(...points, 0);
   const domain = maxY - minY || 1;
-  const yFor = (value) => pad.top + chartHeight - ((value - minY) / domain) * chartHeight;
+  const yFor = (value) =>
+    pad.top + chartHeight - ((value - minY) / domain) * chartHeight;
 
   ctx.strokeStyle = "rgba(95, 108, 114, 0.26)";
   ctx.lineWidth = 1;
@@ -748,7 +902,11 @@ function drawForecast(monthlyBase, growthRate, currency) {
 
     ctx.fillStyle = "#647177";
     ctx.font = "11px IBM Plex Mono";
-    ctx.fillText(formatCurrency(fromBaseCurrency(value, currency), currency), 8, y + 4);
+    ctx.fillText(
+      formatCurrency(fromBaseCurrency(value, currency), currency),
+      8,
+      y + 4,
+    );
   }
 
   ctx.beginPath();
@@ -759,7 +917,12 @@ function drawForecast(monthlyBase, growthRate, currency) {
     else ctx.lineTo(x, y);
   });
 
-  const areaGradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartHeight);
+  const areaGradient = ctx.createLinearGradient(
+    0,
+    pad.top,
+    0,
+    pad.top + chartHeight,
+  );
   areaGradient.addColorStop(0, "rgba(53, 86, 109, 0.2)");
   areaGradient.addColorStop(1, "rgba(53, 86, 109, 0.02)");
   ctx.lineTo(pad.left + chartWidth, pad.top + chartHeight);
@@ -790,7 +953,10 @@ function drawForecast(monthlyBase, growthRate, currency) {
 
     if (index === 0 || index === 11) {
       const marker = index === 0 ? "Now" : "12 mo";
-      const markerValue = formatCurrency(fromBaseCurrency(value, currency), currency);
+      const markerValue = formatCurrency(
+        fromBaseCurrency(value, currency),
+        currency,
+      );
       ctx.fillStyle = "#4d595f";
       ctx.font = "12px IBM Plex Sans";
       ctx.fillText(marker, x - 14, height - 12);
@@ -803,51 +969,79 @@ function drawForecast(monthlyBase, growthRate, currency) {
   return points[points.length - 1] || 0;
 }
 
-function renderRecommendations(rows, monthlyUsd, topCategory, deltaUsd, budgetUsd) {
+function renderRecommendations(
+  rows,
+  monthlyUsd,
+  topCategory,
+  deltaUsd,
+  budgetUsd,
+) {
   const tips = [];
   const isOnTarget = Math.abs(deltaUsd) < 0.005;
 
   if (!rows.length) {
-    tips.push("Start with the two or three services you understand best. The biggest line items usually matter more than perfect detail.");
-    tips.push("Use a quick starting point if you want a realistic first draft before you customize the stack.");
+    tips.push(
+      "Start with the two or three services you understand best. The biggest line items usually matter more than perfect detail.",
+    );
+    tips.push(
+      "Use a quick starting point if you want a realistic first draft before you customize the stack.",
+    );
   } else {
-    const topService = [...rows].sort((a, b) => monthlyCost(b) - monthlyCost(a))[0];
+    const topService = [...rows].sort(
+      (a, b) => monthlyCost(b) - monthlyCost(a),
+    )[0];
     const onDemandSpend = rows
       .filter((row) => row.model === "on-demand")
       .reduce((sum, row) => sum + monthlyCost(row), 0);
-    const growthRate = clamp(toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE), -10, 25);
+    const growthRate = clamp(
+      toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE),
+      -10,
+      25,
+    );
 
     if (topCategory && monthlyUsd > 0) {
       const share = Math.round((topCategory[1] / monthlyUsd) * 100);
-      tips.push(`${topCategory[0]} carries about ${share}% of the monthly run rate. That is the first assumption worth pressure-testing.`);
+      tips.push(
+        `${topCategory[0]} carries about ${share}% of the monthly run rate. That is the first assumption worth pressure-testing.`,
+      );
     }
 
     if (budgetUsd > 0) {
       if (isOnTarget) {
-        tips.push("The plan is landing right on budget. Keep a little breathing room anyway because transfer, support, and logging costs rarely stay perfectly flat.");
+        tips.push(
+          "The plan is landing right on budget. Keep a little breathing room anyway because transfer, support, and logging costs rarely stay perfectly flat.",
+        );
       } else if (deltaUsd > 0) {
         tips.push(
-          `This version is ${formatCurrency(fromBaseCurrency(deltaUsd), currentDisplayCurrency)} over budget. Pull on the biggest always-on services before trimming the small support tools.`
+          `This version is ${formatCurrency(fromBaseCurrency(deltaUsd), currentDisplayCurrency)} over budget. Pull on the biggest always-on services before trimming the small support tools.`,
         );
       } else {
         tips.push(
-          `You still have ${formatCurrency(fromBaseCurrency(Math.abs(deltaUsd)), currentDisplayCurrency)} of budget headroom. Keep some of that for data transfer, logging, and forecast misses.`
+          `You still have ${formatCurrency(fromBaseCurrency(Math.abs(deltaUsd)), currentDisplayCurrency)} of budget headroom. Keep some of that for data transfer, logging, and forecast misses.`,
         );
       }
     } else {
-      tips.push("No budget guardrail is set yet. Add one if you want the worksheet to flag drift early.");
+      tips.push(
+        "No budget guardrail is set yet. Add one if you want the worksheet to flag drift early.",
+      );
     }
 
     if (topService) {
-      tips.push(`${topService.service} is the single largest line item. It is a good candidate for a pricing or architecture review.`);
+      tips.push(
+        `${topService.service} is the single largest line item. It is a good candidate for a pricing or architecture review.`,
+      );
     }
 
     if (monthlyUsd > 0 && onDemandSpend / monthlyUsd > 0.45) {
-      tips.push("A large share of the spend is still on on-demand pricing. Stable workloads may deserve reserved capacity or rightsizing.");
+      tips.push(
+        "A large share of the spend is still on on-demand pricing. Stable workloads may deserve reserved capacity or rightsizing.",
+      );
     }
 
     if (growthRate >= 10) {
-      tips.push("The growth slider is in stress-test territory. Treat the month-12 number as a pressure scenario, not a promise.");
+      tips.push(
+        "The growth slider is in stress-test territory. Treat the month-12 number as a pressure scenario, not a promise.",
+      );
     }
   }
 
@@ -862,18 +1056,23 @@ function renderRecommendations(rows, monthlyUsd, topCategory, deltaUsd, budgetUs
 function recalculateAndRender() {
   const rows = getRowsFromUI({ currency: currentDisplayCurrency });
   const currency = currentDisplayCurrency;
-  const growthRate = clamp(toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE), -10, 25);
+  const growthRate = clamp(
+    toNumber(els.growthRate.value, DEFAULT_GROWTH_RATE),
+    -10,
+    25,
+  );
   const budgetUsd = readBudgetFromUi(currency);
 
-  els.growthRate.value = String(growthRate);
   els.growthValue.value = `${growthRate}%`;
-  els.growthValue.textContent = `${growthRate}%`;
   // Don't write the sanitized name back while typing — it eats trailing
   // spaces and jumps the caret. Sanitization happens on save/export/share.
 
   const costsByRow = rows.map((row) => monthlyCost(row));
   [...els.resourceBody.querySelectorAll("tr")].forEach((tr, index) => {
-    tr.querySelector(".cost-cell").textContent = formatCurrency(fromBaseCurrency(costsByRow[index], currency), currency);
+    tr.querySelector(".cost-cell").textContent = formatCurrency(
+      fromBaseCurrency(costsByRow[index], currency),
+      currency,
+    );
   });
 
   const monthlyUsd = costsByRow.reduce((sum, value) => sum + value, 0);
@@ -881,12 +1080,21 @@ function recalculateAndRender() {
   const categoryMap = aggregateByKey(rows, "category");
   const modelMap = aggregateByKey(rows, "model");
   const topCategory = [...categoryMap.entries()].sort((a, b) => b[1] - a[1])[0];
-  const topShare = topCategory && monthlyUsd > 0 ? Math.round((topCategory[1] / monthlyUsd) * 100) : 0;
+  const topShare =
+    topCategory && monthlyUsd > 0
+      ? Math.round((topCategory[1] / monthlyUsd) * 100)
+      : 0;
   const deltaUsd = monthlyUsd - budgetUsd;
   const isOnTarget = Math.abs(deltaUsd) < 0.005;
 
-  els.monthlyTotal.textContent = formatCurrency(fromBaseCurrency(monthlyUsd, currency), currency);
-  els.annualTotal.textContent = formatCurrency(fromBaseCurrency(annualUsd, currency), currency);
+  els.monthlyTotal.textContent = formatCurrency(
+    fromBaseCurrency(monthlyUsd, currency),
+    currency,
+  );
+  els.annualTotal.textContent = formatCurrency(
+    fromBaseCurrency(annualUsd, currency),
+    currency,
+  );
   els.topCategory.textContent = topCategory ? topCategory[0] : "-";
   els.resourceCount.textContent = String(rows.length);
 
@@ -897,11 +1105,12 @@ function recalculateAndRender() {
     ? "On target"
     : `${deltaUsd > 0 ? "Over " : "Under "}${formatCurrency(
         fromBaseCurrency(Math.abs(deltaUsd), currency),
-        currency
+        currency,
       )}`;
 
   if (!rows.length) {
-    els.scenarioTag.textContent = "Draft model • start with a few trusted line items";
+    els.scenarioTag.textContent =
+      "Draft model • start with a few trusted line items";
   } else if (isOnTarget) {
     els.scenarioTag.textContent = `${rows.length} services • on target • ${topCategory ? `${topCategory[0]} leads spend` : "balanced mix"}`;
   } else if (deltaUsd > 0) {
@@ -919,11 +1128,11 @@ function recalculateAndRender() {
   const month12Usd = drawForecast(monthlyUsd, growthRate, currency);
   els.forecastTag.textContent = `If this growth holds, month 12 lands at ${formatCurrency(
     fromBaseCurrency(month12Usd, currency),
-    currency
+    currency,
   )}.`;
 
   renderRecommendations(rows, monthlyUsd, topCategory, deltaUsd, budgetUsd);
-  saveState(rows, currency, growthRate, budgetUsd);
+  persistState();
 }
 
 function applyScenarioState({
@@ -933,14 +1142,21 @@ function applyScenarioState({
   currency = BASE_CURRENCY,
   rows = getDefaultRows(),
 }) {
-  currentDisplayCurrency = exchangeRates[currency] ? currency : BASE_CURRENCY;
+  currentDisplayCurrency = CALC_EXCHANGE_RATES[currency]
+    ? currency
+    : BASE_CURRENCY;
   els.currencySelect.value = currentDisplayCurrency;
   els.scenarioName.value = sanitizeScenarioName(scenarioName);
-  els.growthRate.value = String(clamp(toNumber(growthRate, DEFAULT_GROWTH_RATE), -10, 25));
+  els.growthRate.value = String(
+    clamp(toNumber(growthRate, DEFAULT_GROWTH_RATE), -10, 25),
+  );
   setBudgetInput(monthlyBudget, currentDisplayCurrency);
 
-  const normalizedRows = normalizeRows(rows, { amountsInBaseCurrency: true });
-  renderRows(normalizedRows.length ? normalizedRows : getDefaultRows());
+  // An explicitly empty ledger is a legitimate state — "start from a blank
+  // sheet" has to work. The rows default parameter above already covers an
+  // absent key, so falling back to four demo rows here destroyed the user's
+  // intent on reload and turned a shared blank sheet into four line items.
+  renderRows(normalizeRows(rows, { amountsInBaseCurrency: true }));
   recalculateAndRender();
 }
 
@@ -966,11 +1182,16 @@ function applyPreset(name) {
     currency: BASE_CURRENCY,
     rows: normalizeRows(preset.rows, { amountsInBaseCurrency: true }),
   });
-  setImportStatus(`Loaded the ${preset.scenarioName} starting point.`, "success");
+  setImportStatus(
+    `Loaded the ${preset.scenarioName} starting point.`,
+    "success",
+  );
 }
 
 function handleCurrencyChange() {
-  const nextCurrency = exchangeRates[els.currencySelect.value] ? els.currencySelect.value : BASE_CURRENCY;
+  const nextCurrency = CALC_EXCHANGE_RATES[els.currencySelect.value]
+    ? els.currencySelect.value
+    : BASE_CURRENCY;
   if (nextCurrency === currentDisplayCurrency) {
     recalculateAndRender();
     return;
@@ -983,7 +1204,10 @@ function handleCurrencyChange() {
   renderRows(rows);
   setBudgetInput(budgetUsd, currentDisplayCurrency);
   recalculateAndRender();
-  setImportStatus(`Display currency switched to ${currentDisplayCurrency}.`, "success");
+  setImportStatus(
+    `Display currency switched to ${currentDisplayCurrency}.`,
+    "success",
+  );
 }
 
 function hydrate() {
@@ -998,7 +1222,16 @@ function hydrate() {
       currency: shared.currency,
       rows: shared.rows,
     });
-    history.replaceState(null, "", window.location.pathname + window.location.search);
+    try {
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    } catch {
+      // replaceState is refused on file:// in some browsers. The state is
+      // already applied; only the cosmetic strip of the hash is lost.
+    }
     setImportStatus("Loaded shared worksheet from link.", "success");
     return;
   }
@@ -1018,25 +1251,50 @@ function hydrate() {
   resetApp();
 }
 
+// Reuse the Save payload rather than re-deriving it. This function used to
+// pass BASE_CURRENCY while the DOM held display-currency amounts, so every
+// non-USD link stored EUR figures labelled USD and came back short by the FX
+// rate. The only difference from a saved scenario is the name field.
 function currentShareState() {
-  return {
-    rows: getRowsFromUI({ currency: BASE_CURRENCY }),
-    currency: BASE_CURRENCY,
-    growthRate: Number.parseFloat(els.growthRate.value) || 0,
-    scenarioName: sanitizeScenarioName(els.scenarioName.value),
-    monthlyBudget: readBudgetFromUi(BASE_CURRENCY),
-  };
+  const { name, ...rest } = buildScenarioPayloadFromUi();
+  return { scenarioName: name, ...rest };
+}
+
+// Browsers disagree about a file:// origin — Chromium reports "file://" while
+// Firefox reports the literal string "null" — so origin + pathname produced
+// "null/Users/you/index.html#s=..." in some of them. Derive it from href
+// instead, which is the same in every browser.
+function buildShareUrl(hash) {
+  if (isServedOverHttp()) {
+    return `${window.location.origin}${window.location.pathname}${hash}`;
+  }
+  return `${window.location.href.split("#")[0]}${hash}`;
 }
 
 async function shareCurrentScenario() {
+  let url;
   try {
-    const hash = encodeShareState(currentShareState());
-    const url = `${window.location.origin}${window.location.pathname}${hash}`;
-    await navigator.clipboard.writeText(url);
-    setImportStatus("Shareable link copied to clipboard.", "success");
+    url = buildShareUrl(encodeShareState(currentShareState()));
   } catch (error) {
     setImportStatus(
-      `Could not copy link (${error instanceof Error ? error.message : "unknown"}).`,
+      `Could not encode this scenario (${error instanceof Error ? error.message : "unknown"}).`,
+      "error",
+    );
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(url);
+    // A local path is not reachable by anyone else, so do not imply it is.
+    setImportStatus(
+      isServedOverHttp()
+        ? "Shareable link copied to clipboard."
+        : "Link copied, but it only opens for someone who already has this file at the same path. Export CSV to send the numbers instead.",
+      "success",
+    );
+  } catch {
+    setImportStatus(
+      "This browser would not give the page clipboard access. Export CSV to share the numbers instead.",
       "error",
     );
   }
@@ -1044,14 +1302,17 @@ async function shareCurrentScenario() {
 
 async function openComparison() {
   if (!isServedOverHttp()) {
-    setImportStatus("Comparing saved scenarios needs the backend (npm run dev).", "error");
+    setImportStatus(
+      "Comparing saved scenarios needs the backend (npm run dev).",
+      "error",
+    );
     return;
   }
 
   let items;
   try {
     const response = await apiFetch("/api/scenarios");
-    items = response?.items ?? [];
+    items = Array.isArray(response?.items) ? response.items : [];
   } catch (error) {
     setImportStatus(
       `Could not load scenarios (${error instanceof Error ? error.message : "unknown"}).`,
@@ -1080,7 +1341,7 @@ async function openComparison() {
   for (const item of items) {
     const option = document.createElement("option");
     option.value = item.id;
-    option.textContent = `${item.name} (updated ${String(item.updatedAt || "").slice(0, 10)})`;
+    option.textContent = `${item.name} (updated ${formatDateLabel(item.updatedAt)})`;
     select.appendChild(option);
   }
   select.style.marginRight = "8px";
@@ -1093,7 +1354,9 @@ async function openComparison() {
 
   runButton.addEventListener("click", async () => {
     try {
-      const detail = await apiFetch(`/api/scenarios/${select.value}`);
+      const detail = await apiFetch(
+        `/api/scenarios/${encodeURIComponent(select.value)}`,
+      );
       renderComparison(detail?.item ?? null);
     } catch (error) {
       setImportStatus(
@@ -1121,8 +1384,11 @@ function renderComparison(savedItem) {
   const currentByService = aggregateByKey(currentRows, "service");
   const savedByService = aggregateByKey(savedRows, "service");
 
-  const names = [...new Set([...currentByService.keys(), ...savedByService.keys()])].sort();
-  const fmt = (amount) => formatCurrency(fromBaseCurrency(amount), currentDisplayCurrency);
+  const names = [
+    ...new Set([...currentByService.keys(), ...savedByService.keys()]),
+  ].sort();
+  const fmt = (amount) =>
+    formatCurrency(fromBaseCurrency(amount), currentDisplayCurrency);
 
   els.compareBody.innerHTML = "";
   let totalDelta = 0;
@@ -1172,9 +1438,11 @@ els.resetBtn.addEventListener("click", () => {
 });
 
 els.currencySelect.addEventListener("change", handleCurrencyChange);
-els.growthRate.addEventListener("input", recalculateAndRender);
-els.monthlyBudget.addEventListener("input", recalculateAndRender);
-els.scenarioName.addEventListener("input", recalculateAndRender);
+els.growthRate.addEventListener("input", scheduleRecalculate);
+els.monthlyBudget.addEventListener("input", scheduleRecalculate);
+// The scenario name is not an input to any chart, so a keystroke here should
+// not redraw three canvases to change nothing.
+els.scenarioName.addEventListener("input", schedulePersist);
 els.presetSaas.addEventListener("click", () => applyPreset("saas"));
 els.presetData.addEventListener("click", () => applyPreset("data"));
 els.presetEdge.addEventListener("click", () => applyPreset("edge"));

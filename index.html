@@ -129,7 +129,7 @@
 
         <section id="comparePanel" class="compare-panel" hidden aria-label="Scenario comparison">
           <h2>Scenario comparison</h2>
-          <p id="compareSummary" class="compare-summary"></p>
+          <p id="compareSummary" class="compare-summary" aria-live="polite"></p>
           <div class="table-wrap">
             <table id="compareTable">
               <thead>
@@ -142,16 +142,17 @@
 
         <div class="table-wrap">
           <table id="resourceTable">
+            <caption class="visually-hidden">Service ledger. Each row is one infrastructure line item and its calculated monthly cost.</caption>
             <thead>
               <tr>
-                <th>Service</th>
-                <th>Category</th>
-                <th>Model</th>
-                <th>Qty</th>
-                <th>Units / Month</th>
-                <th>Unit Price</th>
-                <th>Discount %</th>
-                <th>Monthly Cost</th>
+                <th scope="col">Service</th>
+                <th scope="col">Category</th>
+                <th scope="col">Model</th>
+                <th scope="col">Qty</th>
+                <th scope="col">Units / Month</th>
+                <th scope="col">Unit Price</th>
+                <th scope="col">Discount %</th>
+                <th scope="col">Monthly Cost</th>
                 <th></th>
               </tr>
             </thead>
@@ -163,7 +164,7 @@
         </p>
       </section>
 
-      <section class="summary">
+      <section class="summary" aria-live="polite" aria-atomic="true">
         <article class="metric-card">
           <p>Monthly Run Rate</p>
           <h3 id="monthlyTotal">$0.00</h3>
@@ -198,21 +199,35 @@
           <div class="chart-header">
             <h2>Commitment Mix</h2>
           </div>
-          <canvas id="modelDonut" width="360" height="260" aria-label="Pricing model donut chart"></canvas>
+          <canvas
+            id="modelDonut"
+            width="360"
+            height="260"
+            role="img"
+            aria-label="Pricing model donut chart. The same split is listed below as text."
+          ></canvas>
           <div id="donutLegend" class="legend"></div>
         </article>
 
         <article class="chart-card chart-wide">
           <div class="chart-header">
             <h2>12-Month Runway</h2>
-            <label class="field-inline compact">
-              <span>Monthly Growth</span>
+            <div class="field-inline compact">
+              <label for="growthRate">Monthly Growth</label>
               <input id="growthRate" type="range" min="-10" max="25" step="1" value="4" />
-              <output id="growthValue">4%</output>
-            </label>
+              <output id="growthValue" for="growthRate">4%</output>
+            </div>
           </div>
           <p id="forecastTag" class="helper-note chart-note">If this growth holds, month 12 lands at $0.00.</p>
-          <canvas id="forecastLine" class="forecast-canvas" width="920" height="300" aria-label="12-month forecast chart"></canvas>
+          <canvas
+            id="forecastLine"
+            class="forecast-canvas"
+            width="920"
+            height="300"
+            role="img"
+            aria-describedby="forecastTag"
+            aria-label="12-month cumulative cost forecast"
+          ></canvas>
         </article>
       </section>
 
@@ -233,9 +248,9 @@
 
     <template id="rowTemplate">
       <tr>
-        <td><input class="input service" type="text" value="API Cluster" /></td>
+        <td><input class="input service" type="text" value="API Cluster" aria-label="Service name" /></td>
         <td>
-          <select class="input category">
+          <select class="input category" aria-label="Category">
             <option>Compute</option>
             <option>Storage</option>
             <option>Database</option>
@@ -246,16 +261,16 @@
           </select>
         </td>
         <td>
-          <select class="input model">
+          <select class="input model" aria-label="Pricing model">
             <option value="on-demand">On-Demand</option>
             <option value="reserved">Reserved</option>
             <option value="spot">Spot</option>
           </select>
         </td>
-        <td><input class="input qty" type="number" min="0" step="1" value="1" /></td>
-        <td><input class="input units" type="number" min="0" step="1" value="730" /></td>
-        <td><input class="input price" type="number" min="0" step="0.0001" value="0.12" /></td>
-        <td><input class="input discount" type="number" min="0" max="100" step="1" value="0" /></td>
+        <td><input class="input qty" type="number" min="0" step="1" value="1" aria-label="Quantity" /></td>
+        <td><input class="input units" type="number" min="0" step="1" value="730" aria-label="Units per month" /></td>
+        <td><input class="input price" type="number" min="0" step="0.0001" value="0.12" aria-label="Unit price" /></td>
+        <td><input class="input discount" type="number" min="0" max="100" step="1" value="0" aria-label="Discount percent" /></td>
         <td class="cost-cell">$0.00</td>
         <td>
           <button class="btn-icon remove" aria-label="Remove resource" title="Remove resource" type="button">
@@ -267,6 +282,7 @@
 
     <script src="calc.js"></script>
     <script src="csv.js"></script>
+    <script src="normalize.js"></script>
     <script src="shareState.js"></script>
     <script src="app.js"></script>
     <script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>

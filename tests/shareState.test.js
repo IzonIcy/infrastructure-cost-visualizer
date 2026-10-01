@@ -41,6 +41,17 @@ describe("encodeShareState / decodeShareState", () => {
     expect(decodeShareState(hash)).toBeNull();
   });
 
+  it("preserves a non-USD display currency through the roundtrip", () => {
+    // The share payload stores base-USD amounts plus the display currency so
+    // the recipient renders the same figures the sender saw. If the currency
+    // field were dropped the link would silently reinterpret those amounts as
+    // USD, which is the bug this guards.
+    const state = { ...SAMPLE_STATE, currency: "EUR", monthlyBudget: 8695.65 };
+    const decoded = decodeShareState(encodeShareState(state));
+    expect(decoded.currency).toBe("EUR");
+    expect(decoded.monthlyBudget).toBe(8695.65);
+  });
+
   it("throws when encoding a non-object", () => {
     expect(() => encodeShareState(null)).toThrow();
     expect(() => encodeShareState("state")).toThrow();

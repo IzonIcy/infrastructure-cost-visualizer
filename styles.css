@@ -317,11 +317,16 @@ h1 {
 }
 
 .drop-zone:hover,
-.drop-zone:focus {
-  outline: none;
+.drop-zone:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
   border-color: rgba(165, 90, 50, 0.5);
   background: rgba(255, 248, 241, 0.95);
-  transform: translateY(-1px);
+}
+
+.drop-zone:focus:not(:focus-visible) {
+  border-color: rgba(165, 90, 50, 0.5);
+  background: rgba(255, 248, 241, 0.95);
 }
 
 .drop-zone.is-dragover {
@@ -385,7 +390,7 @@ select {
 select:focus {
   outline: none;
   border-color: rgba(165, 90, 50, 0.6);
-  box-shadow: 0 0 0 3px rgba(165, 90, 50, 0.12);
+  box-shadow: 0 0 0 3px rgba(165, 90, 50, 0.35);
   background: #fffdf9;
 }
 
@@ -502,6 +507,20 @@ tbody tr:hover {
   background: rgba(255, 251, 246, 0.88);
   color: var(--muted-strong);
   font-size: 1rem;
+}
+
+/* Available to assistive tech, removed from the visual layout. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .summary {
@@ -793,4 +812,15 @@ canvas {
 .compare-summary {
   color: var(--muted, #5b6b7f);
   margin: 0 0 0.75rem;
+}
+
+/* Respect a reduced-motion preference. WCAG 2.3.3. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

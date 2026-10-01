@@ -3,6 +3,21 @@ import helmet from "helmet";
 import path from "node:path";
 import { createScenariosRouter } from "./scenarios/router.js";
 
+// Explicit allowlist rather than express.static(repoRoot): a static mount on
+// the repo root would happily serve data/scenarios.json and package.json.
+// Keeping the list here means a file can never be exposed by accident — it has
+// to be added on purpose, and smoke.js asserts every <script>/<link> in
+// index.html resolves, so forgetting one fails the smoke test.
+const PUBLIC_FILES = new Set([
+  "index.html",
+  "styles.css",
+  "app.js",
+  "calc.js",
+  "csv.js",
+  "normalize.js",
+  "shareState.js",
+]);
+
 export function createApp({ repoRoot }) {
   const app = express();
   const sendFrontendFile = (res, fileName) => {
@@ -47,16 +62,9 @@ export function createApp({ repoRoot }) {
     sendFrontendFile(res, "index.html");
   });
 
-  app.get("/index.html", (_req, res) => {
-    sendFrontendFile(res, "index.html");
-  });
-
-  app.get("/styles.css", (_req, res) => {
-    sendFrontendFile(res, "styles.css");
-  });
-
-  app.get("/app.js", (_req, res) => {
-    sendFrontendFile(res, "app.js");
+  app.get("/:file", (req, res, next) => {
+    if (!PUBLIC_FILES.has(req.params.file)) return next();
+    sendFrontendFile(res, req.params.file);
   });
 
   app.use((req, res) => {
