@@ -8,5 +8,4 @@ npm-debug.log*
 opencode.json
 
 # Agent instruction files
-AGENTS.md
 CLAUDE.md
