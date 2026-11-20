@@ -301,6 +301,37 @@ h1 {
   flex-wrap: wrap;
 }
 
+.inference-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.inference-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Stacks like .field-inline does, but the label sits above the input so
+   seven fields fit in three columns without a wider panel. Scoped to the
+   block because .field-inline is declared later and would otherwise win the
+   tie on align-items. */
+.inference-fields .inference-field {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.inference-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
 .drop-zone {
   margin-top: 12px;
   padding: 14px;
@@ -769,6 +800,11 @@ canvas {
     width: 100%;
   }
 
+  .inference-groups,
+  .inference-metrics {
+    grid-template-columns: 1fr;
+  }
+
   .bar-row {
     grid-template-columns: 110px minmax(0, 1fr);
   }
@@ -784,6 +820,10 @@ canvas {
   }
 
   .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .inference-fields {
     grid-template-columns: 1fr;
   }
 

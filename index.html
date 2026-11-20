@@ -164,6 +164,137 @@
         </p>
       </section>
 
+      <section class="panel controls inference-panel">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Worksheet</p>
+            <h2>AI Inference Spend</h2>
+          </div>
+          <p class="section-copy">
+            Price the same traffic two ways: a hosted API billed per token, and your own GPUs
+            billed per hour. The break-even volume is where the two bills meet.
+          </p>
+        </div>
+
+        <div class="inference-groups">
+          <div>
+            <p class="preset-label">Your GPUs</p>
+            <div class="inference-fields">
+              <label class="field-inline inference-field">
+                <span>Hourly Rate</span>
+                <input
+                  id="inferenceGpuRate"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  aria-label="GPU hourly rate"
+                />
+              </label>
+              <label class="field-inline inference-field">
+                <span>GPU Count</span>
+                <input
+                  id="inferenceGpuCount"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="1"
+                  aria-label="GPU count"
+                />
+              </label>
+              <label class="field-inline inference-field">
+                <span>Hours / Month</span>
+                <input
+                  id="inferenceHours"
+                  class="input"
+                  type="number"
+                  min="0"
+                  max="744"
+                  step="1"
+                  aria-label="GPU hours per month"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <p class="preset-label">Traffic</p>
+            <div class="inference-fields">
+              <label class="field-inline inference-field">
+                <span>Input Tokens / Month</span>
+                <input
+                  id="inferenceInputTokens"
+                  class="input"
+                  type="text"
+                  inputmode="numeric"
+                  aria-label="Input tokens per month"
+                />
+              </label>
+              <label class="field-inline inference-field">
+                <span>Output Tokens / Month</span>
+                <input
+                  id="inferenceOutputTokens"
+                  class="input"
+                  type="text"
+                  inputmode="numeric"
+                  aria-label="Output tokens per month"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <p class="preset-label">Hosted API</p>
+            <div class="inference-fields">
+              <label class="field-inline inference-field">
+                <span>Input Price / 1M</span>
+                <input
+                  id="inferenceInputPrice"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  aria-label="Hosted input price per million tokens"
+                />
+              </label>
+              <label class="field-inline inference-field">
+                <span>Output Price / 1M</span>
+                <input
+                  id="inferenceOutputPrice"
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  aria-label="Hosted output price per million tokens"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="inference-metrics">
+          <article class="metric-card">
+            <p>Hosted API / Month</p>
+            <h3 id="inferenceHostedCost">-</h3>
+          </article>
+          <article class="metric-card">
+            <p>Your GPUs / Month</p>
+            <h3 id="inferenceSelfHostedCost">-</h3>
+          </article>
+          <article class="metric-card">
+            <p>Break-even Volume</p>
+            <h3 id="inferenceBreakEven">-</h3>
+          </article>
+        </div>
+
+        <p id="inferenceVerdict" class="helper-note" aria-live="polite"></p>
+        <p class="toolbar-note">
+          Defaults are rough market figures, not quotes. Replace them with your own rates. This
+          block is a side-by-side comparison, so neither total is added to the monthly run rate
+          below.
+        </p>
+      </section>
+
       <section class="summary" aria-live="polite" aria-atomic="true">
         <article class="metric-card">
           <p>Monthly Run Rate</p>

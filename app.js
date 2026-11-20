@@ -67,6 +67,17 @@ const els = {
   comparePanel: document.getElementById("comparePanel"),
   compareSummary: document.getElementById("compareSummary"),
   compareBody: document.getElementById("compareBody"),
+  inferenceGpuRate: document.getElementById("inferenceGpuRate"),
+  inferenceGpuCount: document.getElementById("inferenceGpuCount"),
+  inferenceHours: document.getElementById("inferenceHours"),
+  inferenceInputTokens: document.getElementById("inferenceInputTokens"),
+  inferenceOutputTokens: document.getElementById("inferenceOutputTokens"),
+  inferenceInputPrice: document.getElementById("inferenceInputPrice"),
+  inferenceOutputPrice: document.getElementById("inferenceOutputPrice"),
+  inferenceHostedCost: document.getElementById("inferenceHostedCost"),
+  inferenceSelfHostedCost: document.getElementById("inferenceSelfHostedCost"),
+  inferenceBreakEven: document.getElementById("inferenceBreakEven"),
+  inferenceVerdict: document.getElementById("inferenceVerdict"),
 };
 
 let currentDisplayCurrency = BASE_CURRENCY;
@@ -710,6 +721,146 @@ function getRowsFromUI({ currency = currentDisplayCurrency } = {}) {
   );
 }
 
+function formatTokenCount(tokens) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
+    tokens,
+  );
+}
+
+// Read-only cells get the compact form: 1.75B is easier to compare than
+// 1,752,000,000. The inputs keep every digit so they stay editable.
+function formatTokenVolume(tokens) {
+  if (!Number.isFinite(tokens) || tokens < 0) return "-";
+  if (tokens >= 1e9) return `${roundTo(tokens / 1e9, 2)}B`;
+  if (tokens >= 1e6) return `${roundTo(tokens / 1e6, 1)}M`;
+  if (tokens >= 1e3) return `${roundTo(tokens / 1e3, 1)}K`;
+  return String(Math.round(tokens));
+}
+
+// Money in the inference block is stored in base currency, the way ledger
+// prices are, so a currency switch converts the inputs and not just the cells.
+// A blank or negative field stays unknown (null) instead of becoming zero: a
+// cleared hosted price would otherwise read as free inference and hand back a
+// confident verdict from a price nobody entered.
+function readInferenceFromUi() {
+  const amount = (element) => {
+    const parsed = calcInferenceAmount(element.value);
+    return parsed === null || parsed < 0 ? null : parsed;
+  };
+  const count = (element, max) => {
+    const parsed = amount(element);
+    return parsed === null ? null : calcClamp(Math.round(parsed), 0, max);
+  };
+  const money = (element) => {
+    const parsed = amount(element);
+    return parsed === null
+      ? null
+      : toBaseCurrency(calcClamp(parsed, 0, 1_000_000));
+  };
+
+  return {
+    gpuHourlyRate: money(els.inferenceGpuRate),
+    gpuCount: count(els.inferenceGpuCount, 1_000_000),
+    gpuHoursPerMonth: count(els.inferenceHours, 744),
+    inputTokensPerMonth: count(els.inferenceInputTokens, 1_000_000_000_000),
+    outputTokensPerMonth: count(els.inferenceOutputTokens, 1_000_000_000_000),
+    hostedInputPricePerMillion: money(els.inferenceInputPrice),
+    hostedOutputPricePerMillion: money(els.inferenceOutputPrice),
+  };
+}
+
+// Saved scenarios, share links and localStorage can arrive without an
+// inference block or with a field missing, so each one falls back on its own.
+function inferenceWithDefaults(inference) {
+  return Object.fromEntries(
+    Object.entries(CALC_INFERENCE_DEFAULTS).map(([key, fallback]) => [
+      key,
+      Number.isFinite(inference?.[key]) ? inference[key] : fallback,
+    ]),
+  );
+}
+
+function setInferenceInputs(inference) {
+  const values = inferenceWithDefaults(inference);
+  els.inferenceGpuRate.value = formatDisplayPrice(values.gpuHourlyRate);
+  els.inferenceGpuCount.value = formatInputNumber(values.gpuCount, 0);
+  els.inferenceHours.value = formatInputNumber(values.gpuHoursPerMonth, 0);
+  els.inferenceInputTokens.value = formatTokenCount(
+    Math.round(values.inputTokensPerMonth),
+  );
+  els.inferenceOutputTokens.value = formatTokenCount(
+    Math.round(values.outputTokensPerMonth),
+  );
+  els.inferenceInputPrice.value = formatDisplayPrice(
+    values.hostedInputPricePerMillion,
+  );
+  els.inferenceOutputPrice.value = formatDisplayPrice(
+    values.hostedOutputPricePerMillion,
+  );
+}
+
+function formatInferenceMoney(amount) {
+  if (amount === null) return "-";
+  return formatCurrency(
+    fromBaseCurrency(amount, currentDisplayCurrency),
+    currentDisplayCurrency,
+  );
+}
+
+function inferenceVerdictText(summary, inference) {
+  if (summary.cheaperSide === null) {
+    return "Fill in the GPU rate and both hosted prices to compare the two sides.";
+  }
+
+  const volume = formatTokenVolume(
+    inference.inputTokensPerMonth + inference.outputTokensPerMonth,
+  );
+
+  if (summary.cheaperSide === INFERENCE_SIDE.TIE) {
+    return `Both sides cost ${formatInferenceMoney(summary.hostedCost)} a month at ${volume} tokens.`;
+  }
+
+  const hostedWins = summary.cheaperSide === INFERENCE_SIDE.HOSTED;
+  const winner = hostedWins ? "Hosted inference" : "Self-hosting";
+  const gap = formatInferenceMoney(
+    Math.abs(summary.hostedCost - summary.selfHostedCost),
+  );
+  const flip = summary.breakEven
+    ? `, and the two meet at ${formatTokenVolume(summary.breakEven.tokensPerMonth)} tokens a month`
+    : "";
+
+  return `${winner} wins at ${volume} tokens a month, ${gap} cheaper than the other side${flip}.`;
+}
+
+function renderInference() {
+  const inference = readInferenceFromUi();
+  const summary = calcInferenceSummary(inference);
+
+  els.inferenceHostedCost.textContent = formatInferenceMoney(
+    summary.hostedCost,
+  );
+  els.inferenceSelfHostedCost.textContent = formatInferenceMoney(
+    summary.selfHostedCost,
+  );
+  els.inferenceBreakEven.textContent = summary.breakEven
+    ? `${formatTokenVolume(summary.breakEven.tokensPerMonth)} tokens`
+    : "-";
+  els.inferenceVerdict.textContent = inferenceVerdictText(summary, inference);
+
+  els.inferenceHostedCost
+    .closest(".metric-card")
+    .classList.toggle(
+      "metric-under",
+      summary.cheaperSide === INFERENCE_SIDE.HOSTED,
+    );
+  els.inferenceSelfHostedCost
+    .closest(".metric-card")
+    .classList.toggle(
+      "metric-under",
+      summary.cheaperSide === INFERENCE_SIDE.SELF_HOSTED,
+    );
+}
+
 function persistState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentShareState()));
@@ -1132,6 +1283,7 @@ function recalculateAndRender() {
   )}.`;
 
   renderRecommendations(rows, monthlyUsd, topCategory, deltaUsd, budgetUsd);
+  renderInference();
   persistState();
 }
 
@@ -1141,6 +1293,7 @@ function applyScenarioState({
   growthRate = DEFAULT_GROWTH_RATE,
   currency = BASE_CURRENCY,
   rows = getDefaultRows(),
+  inference = CALC_INFERENCE_DEFAULTS,
 }) {
   currentDisplayCurrency = CALC_EXCHANGE_RATES[currency]
     ? currency
@@ -1151,6 +1304,7 @@ function applyScenarioState({
     clamp(toNumber(growthRate, DEFAULT_GROWTH_RATE), -10, 25),
   );
   setBudgetInput(monthlyBudget, currentDisplayCurrency);
+  setInferenceInputs(inference);
 
   // An explicitly empty ledger is a legitimate state — "start from a blank
   // sheet" has to work. The rows default parameter above already covers an
@@ -1181,6 +1335,9 @@ function applyPreset(name) {
     growthRate: preset.growthRate,
     currency: BASE_CURRENCY,
     rows: normalizeRows(preset.rows, { amountsInBaseCurrency: true }),
+    // A preset swaps the stack, not the inference assumptions the reader
+    // typed in for their own traffic.
+    inference: readInferenceFromUi(),
   });
   setImportStatus(
     `Loaded the ${preset.scenarioName} starting point.`,
@@ -1198,11 +1355,13 @@ function handleCurrencyChange() {
   }
 
   const rows = getRowsFromUI({ currency: currentDisplayCurrency });
+  const inference = readInferenceFromUi();
   const budgetUsd = readBudgetFromUi(currentDisplayCurrency);
   currentDisplayCurrency = nextCurrency;
 
   renderRows(rows);
   setBudgetInput(budgetUsd, currentDisplayCurrency);
+  setInferenceInputs(inference);
   recalculateAndRender();
   setImportStatus(
     `Display currency switched to ${currentDisplayCurrency}.`,
@@ -1440,6 +1599,15 @@ els.resetBtn.addEventListener("click", () => {
 els.currencySelect.addEventListener("change", handleCurrencyChange);
 els.growthRate.addEventListener("input", scheduleRecalculate);
 els.monthlyBudget.addEventListener("input", scheduleRecalculate);
+[
+  els.inferenceGpuRate,
+  els.inferenceGpuCount,
+  els.inferenceHours,
+  els.inferenceInputTokens,
+  els.inferenceOutputTokens,
+  els.inferenceInputPrice,
+  els.inferenceOutputPrice,
+].forEach((input) => input.addEventListener("input", recalculateAndRender));
 // The scenario name is not an input to any chart, so a keystroke here should
 // not redraw three canvases to change nothing.
 els.scenarioName.addEventListener("input", schedulePersist);
