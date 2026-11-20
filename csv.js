@@ -72,6 +72,61 @@ function parseCsvContent(content) {
   return rows;
 }
 
+// The inference block is not a ledger row, so it rides in the same CSV as a
+// marked two-line block after the rows. A "#inference" lead cell survives a
+// spreadsheet round trip, and the row importer skips those lines instead of
+// reading them as a service called "#inference".
+const CSV_INFERENCE_MARKER = "#inference";
+
+const CSV_INFERENCE_FIELDS = [
+  "currency",
+  "gpuHourlyRate",
+  "gpuCount",
+  "gpuHoursPerMonth",
+  "inputTokensPerMonth",
+  "outputTokensPerMonth",
+  "hostedInputPricePerMillion",
+  "hostedOutputPricePerMillion",
+];
+
+function csvIsInferenceRow(row) {
+  return String(row?.[0] ?? "").trim().toLowerCase() === CSV_INFERENCE_MARKER;
+}
+
+function csvEncodeInferenceSection(inference = {}) {
+  return [
+    [CSV_INFERENCE_MARKER, ...CSV_INFERENCE_FIELDS].join(","),
+    [
+      CSV_INFERENCE_MARKER,
+      ...CSV_INFERENCE_FIELDS.map((field) => csvEscape(inference[field])),
+    ].join(","),
+  ];
+}
+
+/**
+ * Raw cells of the inference block, or null when the file has none. Values
+ * stay as strings: the caller knows which ones are money and which are counts.
+ */
+function csvParseInferenceSection(rows) {
+  const block = (Array.isArray(rows) ? rows : []).filter(csvIsInferenceRow);
+  if (block.length < 2) return null;
+  const headers = block[0].map((cell) => String(cell).trim().toLowerCase());
+  const values = block[1];
+  return Object.fromEntries(
+    CSV_INFERENCE_FIELDS.map((field) => [
+      field,
+      String(values[headers.indexOf(field.toLowerCase())] ?? "").trim(),
+    ]),
+  );
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { csvEscape, parseCsvContent };
+  module.exports = {
+    csvEscape,
+    parseCsvContent,
+    CSV_INFERENCE_MARKER,
+    csvIsInferenceRow,
+    csvEncodeInferenceSection,
+    csvParseInferenceSection,
+  };
 }

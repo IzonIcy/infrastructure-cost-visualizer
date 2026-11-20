@@ -424,6 +424,10 @@ function buildScenarioPayloadFromUi() {
     ),
     monthlyBudget: readBudgetFromUi(currentDisplayCurrency),
     rows: getRowsFromUI({ currency: currentDisplayCurrency }),
+    // Fields the reader left unknown are saved with their default, so a
+    // half-filled panel still saves and validates. The panel showed a dash
+    // for those either way.
+    inference: inferenceWithDefaults(readInferenceFromUi()),
   };
 }
 
@@ -502,6 +506,7 @@ async function loadScenarioFromServer() {
       growthRate: scenario.growthRate,
       currency: scenario.currency,
       rows: scenario.rows,
+      inference: scenario.inference,
     });
 
     setImportStatus(
@@ -518,6 +523,46 @@ async function loadScenarioFromServer() {
   }
 }
 
+// Display-currency values for export, matching the ledger rows. An unknown
+// field exports empty rather than as an invented zero.
+function getDisplayInferenceFromUi() {
+  const inference = readInferenceFromUi();
+  const display = (amount) =>
+    amount === null ? null : fromBaseCurrency(amount);
+  return {
+    ...inference,
+    currency: currentDisplayCurrency,
+    gpuHourlyRate: display(inference.gpuHourlyRate),
+    hostedInputPricePerMillion: display(inference.hostedInputPricePerMillion),
+    hostedOutputPricePerMillion: display(inference.hostedOutputPricePerMillion),
+  };
+}
+
+function applyInferenceSection(section) {
+  const sectionCurrency = CALC_EXCHANGE_RATES[
+    section.currency.toUpperCase()
+  ]
+    ? section.currency.toUpperCase()
+    : currentDisplayCurrency;
+  const amount = (field) => calcInferenceAmount(section[field]);
+  const money = (field) => {
+    const parsed = amount(field);
+    return parsed === null
+      ? null
+      : calcConvertCurrency(parsed, sectionCurrency, BASE_CURRENCY);
+  };
+
+  setInferenceInputs({
+    gpuHourlyRate: money("gpuHourlyRate"),
+    gpuCount: amount("gpuCount"),
+    gpuHoursPerMonth: amount("gpuHoursPerMonth"),
+    inputTokensPerMonth: amount("inputTokensPerMonth"),
+    outputTokensPerMonth: amount("outputTokensPerMonth"),
+    hostedInputPricePerMillion: money("hostedInputPricePerMillion"),
+    hostedOutputPricePerMillion: money("hostedOutputPricePerMillion"),
+  });
+}
+
 function exportRowsAsCsv() {
   const rows = getDisplayRowsFromUI().map((row) => ({
     ...row,
@@ -528,6 +573,7 @@ function exportRowsAsCsv() {
   rows.forEach((row) => {
     lines.push(CSV_HEADERS.map((key) => csvEscape(row[key])).join(","));
   });
+  lines.push(...csvEncodeInferenceSection(getDisplayInferenceFromUi()));
 
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -560,6 +606,7 @@ function importRowsFromCsv(content) {
 
   const importedRows = parsedRows
     .slice(1)
+    .filter((row) => !csvIsInferenceRow(row))
     .map((cols) => {
       const rawRow = {
         service: cols[headerIndex("service")] ?? "",
@@ -592,9 +639,11 @@ function importRowsFromCsv(content) {
   }
 
   renderRows(importedRows);
+  const inferenceSection = csvParseInferenceSection(parsedRows.slice(1));
+  if (inferenceSection) applyInferenceSection(inferenceSection);
   recalculateAndRender();
   setImportStatus(
-    `Imported ${importedRows.length} row(s) from CSV.`,
+    `Imported ${importedRows.length} row(s) from CSV${inferenceSection ? " and the inference block" : ""}.`,
     "success",
   );
 }
@@ -1380,6 +1429,7 @@ function hydrate() {
       growthRate: shared.growthRate,
       currency: shared.currency,
       rows: shared.rows,
+      inference: shared.inference,
     });
     try {
       history.replaceState(
@@ -1403,6 +1453,7 @@ function hydrate() {
       growthRate: state.growthRate,
       currency: state.currency,
       rows: state.rows,
+      inference: state.inference,
     });
     return;
   }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { csvEscape, parseCsvContent } from "../csv.js";
+import {
+  csvEncodeInferenceSection,
+  csvEscape,
+  csvIsInferenceRow,
+  csvParseInferenceSection,
+  parseCsvContent,
+} from "../csv.js";
 
 describe("csvEscape", () => {
   it("passes plain values through", () => {
@@ -71,5 +77,45 @@ describe("parseCsvContent", () => {
 
   it("returns no rows for empty input", () => {
     expect(parseCsvContent("")).toEqual([]);
+  });
+});
+
+describe("inference CSV block", () => {
+  const inference = {
+    currency: "USD",
+    gpuHourlyRate: 4,
+    gpuCount: 2,
+    gpuHoursPerMonth: 730,
+    inputTokensPerMonth: 40_000_000,
+    outputTokensPerMonth: 8_000_000,
+    hostedInputPricePerMillion: 2.5,
+    hostedOutputPricePerMillion: 10,
+  };
+
+  it("round-trips through the parser", () => {
+    const parsed = parseCsvContent(csvEncodeInferenceSection(inference).join("\n"));
+    expect(csvParseInferenceSection(parsed)).toEqual(
+      Object.fromEntries(
+        Object.entries(inference).map(([key, value]) => [key, String(value)]),
+      ),
+    );
+  });
+
+  it("marks its own rows so they are not imported as services", () => {
+    expect(csvIsInferenceRow(["#inference", "USD"])).toBe(true);
+    expect(csvIsInferenceRow(["#Inference", "USD"])).toBe(true);
+    expect(csvIsInferenceRow(["Compute Node", "Compute"])).toBe(false);
+    expect(csvIsInferenceRow([])).toBe(false);
+  });
+
+  it("reports no block for a ledger-only file", () => {
+    const ledger = parseCsvContent("service,category,model,qty,units,price,discount,currency");
+    expect(csvParseInferenceSection(ledger.slice(1))).toBeNull();
+  });
+
+  it("keeps an unknown value empty instead of writing a zero", () => {
+    const rows = csvEncodeInferenceSection({ ...inference, hostedOutputPricePerMillion: null });
+    expect(rows[1].endsWith(",")).toBe(true);
+    expect(csvParseInferenceSection(parseCsvContent(rows.join("\n"))).hostedOutputPricePerMillion).toBe("");
   });
 });
